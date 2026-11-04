@@ -2,9 +2,11 @@
 
 <img src="assets/pocket-sync-logo.png" width="96" height="96" alt="Pocket Sync logo">
 
-Pocket Sync compares a public Spotify playlist with a music folder or a mounted MP3 player. Review matches, then copy songs you already have or download missing recordings from YouTube. **Custom audio** imports a public YouTube video or joins a YouTube playlist into one MP3 without a Spotify link.
+Pocket Sync is a macOS app for syncing public Spotify playlists with a music folder or a USB MP3 player. Compare the tracks first, review uncertain matches, then add only what’s missing. It can reuse audio you already have and look for missing recordings on YouTube.
 
-The app runs locally on your Mac. Setup requires no account, API key, or AI service. Spotify supplies playlist and track metadata, and spotDL finds audio on YouTube. Pocket Sync is independent of Spotify and YouTube. Use only sources you are authorized to download under the applicable service terms and law.
+[**Try the source preview**](#install-from-source) · [View screenshots](docs/SCREENSHOTS.md) · [See a USB MP3 player sync](docs/USB-MP3-PLAYER.md)
+
+The app runs locally on your Mac. Setup requires no account or API key. Pocket Sync is independent of Spotify and YouTube. Use only sources you are authorized to download under the applicable service terms and law.
 
 ![Pocket Sync comparing a fictional playlist with a music folder](docs/screenshots/playlist.png)
 
