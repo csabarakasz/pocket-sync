@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <title>Pocket Sync</title>
+  <rect x="80" y="80" width="864" height="864" rx="220" fill="#b9d3ff"/>
+  <path fill="#162536" fill-rule="evenodd" d="M282 325h98v52c29-40 72-62 123-62 101 0 171 83 171 191 0 112-70 192-172 192-49 0-90-18-119-54v118H282V325zm100 181c0 60 37 102 94 102 58 0 96-42 96-102s-38-102-96-102c-57 0-94 42-94 102z"/>
+  <circle cx="733" cy="645" r="54" fill="#162536"/>
+</svg>

@@ -1,0 +1,20 @@
+.venv/
+__pycache__/
+Downloads/
+.runtime/
+.DS_Store
+*.py[cod]
+.env
+.env.*
+*.app/
+*.log
+*.mp3
+
+dist/
+
+# Local signing and distribution material
+*.cer
+*.p12
+*.p8
+*.certSigningRequest
+*.zip

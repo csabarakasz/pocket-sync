@@ -1,0 +1,22 @@
+POCKET SYNC FOR MAC
+
+1. Unzip the download and drag Pocket Sync.app to Applications or your Desktop.
+2. Double-click Pocket Sync.app. The first launch needs internet access to
+   install FFmpeg and Deno if they are missing.
+3. Follow the walkthrough. You can reopen it from Help & settings in the sidebar.
+
+If macOS says the developer can't be verified
+
+This test build hasn't been notarized by Apple. Only proceed if you trust the
+person you received it from and know the download hasn't been modified.
+
+1. Try to open Pocket Sync.app once and dismiss the warning.
+2. Open Apple menu > System Settings > Privacy & Security.
+3. Scroll down to Security and choose Open Anyway for Pocket Sync.
+4. Confirm the prompt. macOS may ask you to authenticate.
+
+The exception applies to Pocket Sync. If macOS reports malware or says the app
+is damaged, stop and get a fresh copy from the publisher.
+
+Apple's instructions
+https://support.apple.com/en-us/102445

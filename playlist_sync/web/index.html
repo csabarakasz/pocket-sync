@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pocket Sync</title><link rel="icon" type="image/svg+xml" href="/logo.svg"><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body>
+<aside class="sidebar">
+  <a class="brand" href="/" aria-label="Pocket Sync home"><span class="brand-mark" aria-hidden="true">p.</span><span>Pocket Sync</span></a>
+  <div class="side-heading">YOUR LIBRARY</div>
+  <nav id="library-nav" aria-label="Saved libraries"></nav>
+  <button class="side-view" id="custom-view">♫ Custom audio</button>
+  <button class="add-library" id="add-library">＋ Add playlist</button>
+  <div class="side-bottom"><span class="local-dot"></span> Runs on your Mac<p>A little more music.<br>Ready for the next adventure.</p></div>
+  <button type="button" class="side-view" id="help-settings" aria-haspopup="dialog">Help &amp; settings</button>
+</aside>
+<main>
+<header><div class="breadcrumb">Library <span>/</span> <span id="breadcrumb-library">Your music</span></div></header>
+<section class="intro" id="library-intro"><div><h1 id="workspace-name">Your music</h1><p>Copy songs you already have, and download what’s missing.</p></div><button class="button secondary" id="edit-library">Library settings</button></section>
+<section id="setup" class="setup" aria-label="Playlist and destination">
+ <div class="setup-field"><label for="playlist">Spotify playlist</label><input id="playlist" type="url" spellcheck="false" placeholder="Paste a Spotify playlist link"><div class="field-note" id="playlist-name">The playlist you want to keep up with</div></div>
+ <div class="setup-field"><label for="folder">Music folder or MP3 player</label><div class="folder-control"><input id="folder" type="text" readonly spellcheck="false" placeholder="Click to choose a folder"><button type="button" class="folder-choose" id="choose-folder" aria-label="Choose music folder">Choose…</button></div><button type="button" class="manual-path" id="folder-manual">Enter path manually</button><div class="field-note" id="folder-note">Use a folder on your Mac or a connected player</div></div>
+ <button id="check" class="button secondary">Check for new songs <span aria-hidden="true">↻</span></button>
+</section>
+<div class="notice" id="notice" role="alert" hidden></div>
+<section id="library-section" class="library" aria-label="Playlist comparison">
+  <div class="library-heading"><div><h2 id="library-title">Your playlist</h2><p id="checked">Check your playlist to see what’s ready to add.</p></div><a id="spotify-link" hidden target="_blank" rel="noreferrer">Open in Spotify ↗</a></div>
+  <div class="summary" id="summary" hidden>
+    <div><strong id="count-total">0</strong><span>songs in the playlist</span></div>
+    <div><strong id="count-present">0</strong><span>already in your folder</span></div>
+    <div class="summary-new"><strong id="count-missing">0</strong><span>new songs to add</span></div>
+    <div><strong id="count-review">0</strong><span>possible matches to review</span></div>
+  </div>
+  <div class="last-sync" id="last-sync" hidden></div>
+  <div class="action-strip"><div><span class="status-dot" id="status-dot" hidden></span><span id="status" class="wait-status is-waiting" role="status">Connecting to Pocket Sync…</span></div><button id="sync" class="button primary" disabled>Add missing songs <span aria-hidden="true">↓</span></button><button id="combine-playlist" type="button" class="button secondary">Combine YouTube parts…</button><button id="stop" class="button secondary" hidden>Stop</button></div>
+  <div class="job-progress" id="job-progress" hidden>
+    <progress id="progress" max="1" aria-label="Current task progress"></progress>
+    <span id="progress-text" role="status"></span>
+    <p id="wait-note" hidden>Still working. Large playlists and slow service responses can take longer. You can stop the current task here.</p>
+  </div>
+  <nav class="tabs" aria-label="Filter tracks"><button class="tab active" data-tab="missing">To add <span id="tab-missing">0</span></button><button class="tab" data-tab="review">Review <span id="tab-review">0</span></button><button class="tab" data-tab="present">In folder <span id="tab-present">0</span></button><button class="tab" data-tab="extras">Other files <span id="tab-extras">0</span></button></nav>
+  <div class="search-bar"><input id="search" type="search" aria-label="Search songs" placeholder="Search title, artist, or album…"><span id="list-caption">Your next songs will appear here</span></div>
+  <div class="bulk-selection" id="bulk-selection" hidden><span id="selection-count" role="status" aria-live="polite"></span><div><button type="button" class="button secondary" id="select-all">Select all to add</button><button type="button" class="button secondary" id="select-none">Clear selection</button></div><small>Uncheck any song to leave it out of this sync. Selection applies across search results.</small></div>
+  <div id="track-list" aria-live="polite"></div>
+</section>
+<section class="library history-section" id="history-section" aria-label="Sync history" hidden>
+  <div class="library-heading"><div><h2>Sync history</h2><p>What was added, what failed, and where each file went.</p></div><button class="button secondary" id="history-refresh">Refresh history ↻</button></div>
+  <div class="history-toolbar"><span id="history-job-status" class="wait-status" role="status" aria-live="polite" hidden></span><button type="button" id="history-stop" class="button secondary" hidden>Stop sync</button><span id="history-caption">Syncs for the selected music folder</span><label><input type="checkbox" id="history-all"> Show all libraries</label></div>
+  <div id="history-list"></div>
+</section>
+<section id="custom-section" hidden><div class="intro"><div><h1>Custom audio</h1><p>Add YouTube stories, audiobooks, or songs without a Spotify link.</p></div><button class="button primary" id="custom-add">Add from YouTube…</button></div><p class="source-note">Combine a playlist into one MP3, or import a single video. Known imports are recognized by their embedded source information. Other files stay untouched.</p><div class="history-toolbar"><span id="custom-job-status" class="wait-status" role="status"></span><button class="button secondary" id="custom-stop" hidden>Stop import</button><button class="button secondary" id="custom-history">Import history →</button></div><div id="custom-list" class="library"></div></section>
+<dialog id="custom-dialog" class="recording-dialog panel-dialog" aria-labelledby="custom-title"><form id="custom-form" class="dialog-frame"><div class="dialog-heading"><h2 id="custom-title">Add custom audio</h2><button class="button secondary" type="button" id="custom-close" aria-label="Close custom audio">✕</button></div>
+<div class="dialog-scroll"><p class="source-note">A playlist becomes one complete MP3 in playlist order. No Spotify link is needed.</p><label for="custom-url">YouTube video or playlist link</label><div class="recording-search"><input type="url" id="custom-url" required><button class="button secondary" type="button" id="custom-read">Read link</button></div>
+<label for="custom-folder">Destination folder or MP3 player</label><div class="folder-control"><input type="text" id="custom-folder" required><button class="folder-choose" type="button" id="custom-browse">Choose…</button></div>
+<p id="custom-feedback" class="wait-status" role="status"></p><div id="custom-preview" hidden><label for="custom-name">Title</label><input type="text" id="custom-name" maxlength="150"><label for="custom-author">Author or artist</label><input type="text" id="custom-author" maxlength="150"><label for="custom-album">Album or book</label><input type="text" id="custom-album" maxlength="150"><h3>Parts, in playback order</h3><ol id="custom-parts"></ol><p class="source-note">Cover art comes from the YouTube thumbnail. Previously imported copies are reused when available; files already in the destination are skipped.</p></div></div><div class="dialog-actions dialog-footer"><span id="custom-count"></span><button class="button primary" type="submit" id="custom-start" disabled>Add to folder</button></div></form></dialog>
+<dialog id="library-dialog" class="panel-dialog" aria-labelledby="library-dialog-title"><form id="library-form" class="dialog-frame">
+ <div class="dialog-heading"><h2 id="library-dialog-title">Add a playlist</h2><button type="button" class="button secondary" id="library-close" aria-label="Close library settings">✕</button></div>
+ <div class="dialog-scroll"><p class="source-note">Give this playlist a name and its own destination. You can change either later.</p>
+ <label for="library-name-input">Library name</label><input id="library-name-input" type="text" maxlength="80" required placeholder="Weekend music">
+ <label for="library-playlist-input">Spotify playlist link</label><input id="library-playlist-input" type="url" required spellcheck="false" placeholder="https://open.spotify.com/playlist/…">
+ <label for="library-folder-input">Destination folder <span class="optional">(you can choose later)</span></label>
+ <div class="folder-control"><input id="library-folder-input" type="text" readonly spellcheck="false" placeholder="Click to choose a folder"><button type="button" class="folder-choose" id="library-choose-folder" aria-label="Choose library destination folder">Choose…</button></div>
+ <button type="button" class="manual-path" id="library-folder-manual">Enter path manually</button>
+ <p id="library-feedback" role="alert"></p></div><div class="dialog-actions dialog-footer"><button type="button" class="button secondary" id="library-cancel">Cancel</button><button type="submit" class="button primary" id="library-save" disabled>Save library</button></div>
+</form></dialog>
+<dialog id="combine-dialog" class="recording-dialog panel-dialog" aria-labelledby="combine-title"><form id="combine-form" class="dialog-frame">
+ <div class="dialog-heading"><h2 id="combine-title">Combine a YouTube playlist</h2><button type="button" class="button secondary" id="combine-close" aria-label="Close combined recording">✕</button></div>
+ <aside id="combine-guide" class="recovery-hint dialog-guide" hidden>
+  <p id="combine-guide-text" role="status"></p>
+  <div class="recovery-actions"><button type="button" class="button primary" id="combine-guide-next" hidden>Review Spotify tracks</button><button type="button" class="button secondary" id="combine-guide-end">End walkthrough</button></div>
+ </aside>
+ <div class="dialog-scroll">
+ <div class="combine-intro"><p class="source-note">Make one complete MP3 from a story split into parts. Choose which Spotify tracks it covers; their individual durations can differ.</p><button type="button" class="button secondary" id="combine-guide-open">Show me how</button></div>
+ <label for="combine-url">YouTube playlist link</label><div class="recording-search" id="combine-link-controls"><input id="combine-url" type="url" placeholder="YouTube playlist or video with a playlist link"><button type="button" id="combine-inspect" class="button secondary">Read playlist</button></div>
+ <p id="combine-feedback" class="wait-status" role="status" aria-live="polite"></p>
+ <div id="combine-preview" hidden><label for="combine-name">Combined recording title</label><input id="combine-name" maxlength="150">
+ <div id="combine-order"><h3>Parts to combine, in playlist order</h3><ol id="combine-parts"></ol></div>
+ <div id="combine-coverage"><h3>Spotify tracks covered by this recording</h3><p class="source-note">Suggested matches are checked. Adjust them before confirming. Existing files are preserved.</p><div id="combine-tracks"></div>
+ <label class="coverage-confirm"><input id="combine-confirm" type="checkbox">I confirm this YouTube playlist is the same complete recording and covers all the Spotify tracks checked above, even when the parts and durations differ.</label></div>
+ </div></div><div class="dialog-actions dialog-footer"><span id="combine-total"></span><button type="submit" class="button primary" id="combine-start" disabled>Combine and add to folder</button></div>
+ </form></dialog>
+<dialog id="source-dialog" class="recording-dialog panel-dialog" aria-labelledby="source-title">
+ <form id="source-form" class="dialog-frame"><div class="dialog-heading"><h2 id="source-title">Choose a YouTube recording</h2><button type="button" class="button secondary" id="source-close" aria-label="Close recording chooser">✕</button></div>
+ <aside id="source-recovery" class="recovery-hint dialog-guide" hidden>
+   <p id="source-recovery-text" role="status"></p>
+   <button type="button" class="button secondary" id="source-recovery-end">End walkthrough</button>
+ </aside>
+ <div id="source-scroll" class="dialog-scroll">
+ <p id="source-song"></p><p class="source-note">Pick the correct artist and version. Spotify’s title, album and cover art will be embedded, and the audio duration will still be checked.</p>
+ <label for="recording-query">Search YouTube</label><div class="recording-search"><input id="recording-query" type="search" maxlength="250" placeholder="Artist and song title"><button class="button secondary" type="button" id="recording-search">Search</button></div>
+ <p id="recording-status" class="wait-status" role="status" aria-live="polite"></p><div id="recording-results" aria-label="YouTube search results"></div>
+ <label for="source-url">Selected YouTube video link (or paste your own)</label><input id="source-url" type="url" required placeholder="https://www.youtube.com/watch?v=…" spellcheck="false">
+ </div><div class="dialog-actions dialog-footer" id="source-actions"><p id="source-feedback" role="status"></p><a id="source-search" target="_blank" rel="noreferrer">Search YouTube ↗</a><button id="source-download" class="button primary" type="submit" disabled>Download this recording ↓</button></div></form>
+</dialog>
+<details id="activity"><summary>Activity & download details</summary><p>Audio is matched on YouTube using Spotify metadata. Every new MP3 is checked for cover art, tags, and duration before it is copied. A match can still be a different recording.</p><div id="error-list"></div><pre id="log">No activity yet.</pre></details>
+<footer><span>Your existing songs stay exactly where they are.</span><span>MP3 · Embedded cover art · Artist & album tags</span></footer>
+</main>
+<dialog id="help-dialog" class="panel-dialog" aria-labelledby="help-title">
+ <div class="dialog-frame">
+  <div class="dialog-heading">
+    <h2 id="help-title">Help &amp; settings</h2>
+    <form method="dialog"><button class="button secondary" aria-label="Close help and settings">✕</button></form>
+  </div>
+  <div class="dialog-scroll">
+  <div class="help-action">
+    <div><h3>Getting started</h3><p>See where to add a playlist, pick a folder, and sync your songs.</p></div>
+    <button type="button" class="button secondary" id="walkthrough-help" disabled>Replay walkthrough</button>
+  </div>
+  <div class="help-action">
+    <div><h3>Choose a recording</h3><p>Show the walkthrough again the next time a song needs a manual match.</p></div>
+    <button type="button" class="button secondary" id="reset-recording-guide">Reset recording walkthrough</button>
+  </div>
+  <p id="reset-recording-status" class="source-note" role="status"></p>
+  <div class="help-action">
+    <div><h3>Library settings</h3><p>Change the selected library’s name, Spotify link, or destination.</p></div>
+    <button type="button" class="button secondary" id="help-library" disabled>Open settings</button>
+  </div>
+  <details class="help-topic">
+    <summary>Troubleshooting</summary>
+    <dl>
+      <dt>Playlist won’t load</dt><dd>Make sure the Spotify playlist is public and paste its full share link.</dd>
+      <dt>Music player doesn’t appear</dt><dd>Check that it mounts in Finder. Select a folder on the player or enter its path manually.</dd>
+      <dt>A download failed or matched the wrong recording</dt><dd>Check Sync history or Activity &amp; download details. Try Choose recording… to pick a different YouTube source.</dd>
+    </dl>
+  </details>
+  <details class="help-topic">
+    <summary>Request a feature</summary>
+    <p>Fill in this draft, then copy it into a new issue on the Pocket Sync GitHub repository. Keep private links and paths out of the draft.</p>
+    <label for="feature-draft">Feature request draft</label>
+    <textarea id="feature-draft" rows="5" spellcheck="true">What would you like Pocket Sync to do?
+
+What are you trying to accomplish?
+
+What do you do today?</textarea>
+    <button type="button" class="button secondary" id="feature-copy">Copy draft</button> <a href="https://github.com/csabarakasz/pocket-sync/issues/new/choose" target="_blank" rel="noreferrer">Open GitHub Issues ↗</a>
+    <p id="feature-status" role="status"></p>
+  </details>
+  </div>
+  <form method="dialog" class="dialog-actions dialog-footer"><button class="button primary">Done</button></form>
+ </div>
+</dialog>
+<dialog id="walkthrough" class="panel-dialog" aria-labelledby="walkthrough-title" aria-describedby="walkthrough-caption">
+  <div class="dialog-frame">
+    <div class="dialog-heading">
+      <div><p id="walkthrough-progress" class="walkthrough-progress"></p><h2 id="walkthrough-title" tabindex="-1"></h2></div>
+      <button type="button" class="button secondary" id="walkthrough-close" aria-label="Close walkthrough">✕</button>
+    </div>
+    <div class="dialog-scroll">
+      <p id="walkthrough-caption" class="walkthrough-caption"></p>
+      <div id="walkthrough-example" hidden></div>
+    </div>
+    <div class="walkthrough-actions dialog-footer">
+      <button type="button" class="button secondary" id="walkthrough-skip">Skip</button>
+      <button type="button" class="button secondary" id="walkthrough-back" hidden>Back</button>
+      <button type="button" class="button primary" id="walkthrough-next">Next</button>
+    </div>
+  </div>
+</dialog>
+<template id="tour-comparison">
+  <p class="tour-sample-label">Example results</p>
+  <ul class="tour-sample-list">
+    <li><strong>Morning Ferry</strong><span class="badge present">✓ In folder</span></li>
+    <li><strong>Side Street</strong><span class="badge review">Check match</span></li>
+    <li><strong>Harbor Lights</strong><span class="badge missing">To add</span></li>
+  </ul>
+</template>
+<template id="tour-review">
+  <p class="tour-sample-label">Example from Review</p>
+  <div class="tour-sample-card">
+    <div class="tour-sample-row"><strong>Side Street</strong><span class="badge review">Check match</span></div>
+    <p>Spotify track · 3:18</p>
+    <div class="candidate"><div>Side Street (Live)<small>Local file · 4:52</small></div></div>
+    <div class="tour-sample-actions"><span>Use this file</span><span>Download a separate copy ↓</span></div>
+  </div>
+</template>
+<template id="tour-no-match">
+  <p class="tour-sample-label">Example from To add</p>
+  <div class="tour-sample-card">
+    <div class="tour-sample-row"><strong>Harbor Lights</strong><span class="badge review">Retry needed</span></div>
+    <p>Automatic matching could not find a suitable YouTube recording.</p>
+    <details class="tour-recordings">
+      <summary>Choose recording…</summary>
+      <ul class="tour-sample-list">
+        <li><strong>Harbor Lights · Official Audio</strong><span>3:42</span></li>
+        <li><strong>Harbor Lights · Live Session</strong><span>5:19</span></li>
+      </ul>
+      <p>Example Spotify duration: 3:42. In the app, select the right recording and choose Download this recording.</p>
+    </details>
+  </div>
+</template>
+<template id="tour-custom">
+  <p class="tour-sample-label">Example import preview</p>
+  <div class="tour-sample-card">
+    <strong>The Lantern Story</strong>
+    <ol class="tour-sample-parts"><li>The First Light</li><li>The Walk Home</li></ol>
+    <p>2 YouTube videos → 1 MP3 in playlist order</p>
+  </div>
+</template>
+<template id="empty-template"><div class="empty"><span class="empty-icon" aria-hidden="true">♫</span><h3>Make room for the next favourite.</h3><p>Choose a playlist and music folder, then check for new songs.</p></div></template>
+<svg id="recording-spotlight" aria-hidden="true" hidden>
+  <defs>
+    <mask id="recording-spotlight-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="100%" height="100%">
+      <rect width="100%" height="100%" fill="white"/>
+      <g id="recording-spotlight-openings" fill="black"></g>
+    </mask>
+  </defs>
+  <rect width="100%" height="100%" fill="#14253d" opacity=".32" mask="url(#recording-spotlight-mask)"/>
+</svg>
+<template id="loading-logo">
+  <svg class="orbit-logo" viewBox="0 0 1024 1024" aria-hidden="true" focusable="false">
+    <rect x="80" y="80" width="864" height="864" rx="220" fill="#b9d3ff"/>
+    <path fill="#162536" fill-rule="evenodd" d="M282 325h98v52c29-40 72-62 123-62 101 0 171 83 171 191 0 112-70 192-172 192-49 0-90-18-119-54v118H282V325zm100 181c0 60 37 102 94 102 58 0 96-42 96-102s-38-102-96-102c-57 0-94 42-94 102z" transform="translate(110 110) scale(.79)"/>
+    <g class="orbit-dot" fill="#285ccf">
+      <circle cx="846" cy="605" r="20" opacity=".27" class="orbit-trail"/>
+      <circle cx="820" cy="671" r="29" opacity=".55" class="orbit-trail"/>
+      <circle cx="782" cy="730" r="53"/>
+    </g>
+  </svg>
+</template>
+</body></html>
