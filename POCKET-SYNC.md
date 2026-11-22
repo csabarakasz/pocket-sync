@@ -73,11 +73,11 @@ Reusable tracks show **Copy song** and their source path. Sync copies the origin
 
 Downloads happen in a staging folder on the Mac, independently of the browser page. Every new MP3 is checked for readable audio, title, artist, album, release date, track number, embedded cover art, and duration before it is copied to the selected folder. A file that fails stays out of the destination and is reported for retry. Only verified tracks appear as present after a sync.
 
-Filenames use `Artist - Title.mp3`, without a Spotify ID suffix. The track ID stays in the embedded source URL so future syncs still recognize the song. Separate tracks with the same filename get a simple `(2)`, `(3)`, etc. suffix without overwriting existing files.
+By default, filenames use `Artist - Title.mp3`, without a Spotify ID suffix. With playback numbering enabled, they receive a permanent prefix such as `072 - Artist - Title.mp3`. The track ID stays in the embedded source URL so future syncs still recognize the song. Separate tracks with the same filename get a simple `(2)`, `(3)`, etc. suffix without overwriting existing files.
 
 Output is MP3 at 128 kbps with album cover art inside the file. Metadata available from Spotify also includes album artist, disc number, and ISRC; optional fields such as genre may be absent. Re-encoding at a higher bitrate would not improve the source audio. Automatic matching cannot prove that two recordings are acoustically identical, so listen to unfamiliar matches.
 
-No deletion or replacement of existing music is performed. Tracks removed from Spotify remain in the folder. A repeat sync rescans the folder and skips tracks already present. Disconnecting/replacing the destination stops copying; the app does not recreate a missing player folder. Files appear under their finished names only after the copy has been flushed. Other applications should avoid writing to the same folder during a sync.
+Normal syncing does not delete or replace existing music. The separate Playback order action can rename existing audio files after a preview. Tracks removed from Spotify remain in the folder. A repeat sync rescans the folder and skips tracks already present. Disconnecting/replacing the destination stops copying; the app does not recreate a missing player folder. Files appear under their finished names only after the copy has been flushed. Other applications should avoid writing to the same folder during a sync.
 
 ## Troubleshooting
 
@@ -89,7 +89,7 @@ No deletion or replacement of existing music is performed. Tracks removed from S
 - **File already exists:** a conflicting filename was preserved. Review that file in Finder before deciding what to do with it.
 - **Connection to local app lost:** reopen the launcher or keep its Terminal window open. Refreshing/closing the browser does not cancel a job while the server is running.
 
-Public Spotify/YouTube access can change or be rate-limited. The app uses the installed spotDL 4.6.0 and its dependencies. It does not collect Spotify passwords or browser cookies. Spotify membership is read afresh on every comparison; track metadata is cached for seven days to avoid fetching the same album details repeatedly.
+Public Spotify/YouTube access can change or be rate-limited. The app uses the installed spotDL 4.6.0 and its dependencies. It does not collect Spotify passwords or browser cookies. Spotify membership is read afresh on every comparison. Cached track metadata is reused for comparisons; details older than seven days are refreshed before downloading. Unchanged local files reuse a persistent tag index, and changed files are reread. Audio duration must be within 20 seconds of Spotify for both automatic and manually selected recordings.
 
 ## Files and verification
 
@@ -103,3 +103,31 @@ Run from the project folder:
 ```
 
 The tests use generated audio and cover matching, artwork checks, preservation of existing files, repeated sync, changed or disconnected destinations, and local HTTP request guards. Physical MP3 player compatibility depends on its filesystem, character support, and artwork display.
+
+
+## Match several recordings and preview them
+
+After a check, choose **Match remaining songs…** to review failed recording matches in playlist order. Choose a result or paste a video link, then **Save match & next**. **Back** lets you revise a choice; **Skip** leaves a song for later. Close and reopen the queue to resume saved choices for this library and destination. **Review matches** shows the batch before **Download matched songs** starts it. A chosen match is a draft until its downloaded audio passes verification. New checks reconcile drafts against songs still needing a match.
+
+Click **Preview** on a search thumbnail to play the YouTube recording inside the app, with playback and seeking controls. Previewing does not select or download it. Changing songs, searching again, or closing the chooser stops playback. Some videos disallow embedding; use another recording or the optional YouTube link. Search results warn when their reported duration differs by more than 20 seconds.
+
+## Stable playback playlist
+
+Each addition maintains **Pocket Sync - Play in order.m3u8** in the destination. Existing playlist entries retain their relative order; new songs append. On first use, existing files are listed in filename order. The playback playlist itself does not rename audio; the optional filename-numbering action below does. Normal syncs, local copies, combined recordings, and custom imports use this same ordering.
+
+Open this playlist on a compatible player to use that order. **Play all songs** may sort filenames, tags, or the device’s own database; its order cannot be guaranteed by the playlist. Device-specific filename migration remains pending confirmation of the player’s actual sorting.
+
+
+## Optional numbered filenames
+
+The default is **Artist - Title.mp3**, without numbering. Numbering is off for a new destination.
+
+For a player that sorts by filename, open **Help & settings → Song filenames**, enable **Add numbers to keep new songs at the end**, and choose 1–6 digits. For example, three digits gives `001`, `002`, `003`; four gives `0001`, `0002`, `0003`. This preference belongs to the selected destination, so libraries sharing that folder share its numbering.
+
+Click **Review naming changes** before **Apply naming settings**. Enabling numbering adds permanent prefixes while preserving the existing filename-sorted relative order. Changing padding retains the same track numbers and updates filenames and saved references. Later additions get higher numbers across app restarts; deleted numbers are not reused. A chosen width has a capacity: three digits supports up to 999 numbered files. The app asks for more digits before exceeding it, so filename sorting stays consistent.
+
+Turning numbering off affects future additions only. Existing filenames are kept. Audio contents, tags, and subfolders are unchanged. If files are added outside the app while numbering is enabled, review the naming changes again before syncing.
+
+The destination stores a hidden numbering record and rollback journal. App-side match confirmations, reusable-file pointers, custom-import references and history links are updated with backups. A stale preview is rejected. Failed renames attempt to restore the original names; after a disconnection, keep the journal for recovery. Some FAT filenames require composed Unicode and others decomposed Unicode during rename; equivalent forms are retried when lookup fails.
+
+After safely ejecting a player, let its music list refresh. An internal media database or tag-based sorting may behave differently from filename sorting.

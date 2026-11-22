@@ -53,6 +53,14 @@ On your first launch, the app offers a walkthrough with sample match results, a 
 
 For YouTube-only imports, choose **Custom audio → Add from YouTube…**, paste a link, and select a destination. A connected MP3 player can be a destination if macOS mounts it as a normal drive. See the [user guide](POCKET-SYNC.md) for matching, bulk sync, and history.
 
+## What’s new in 1.1.0
+
+- Faster repeat checks with persistent file metadata caching and reuse of Spotify track details. Playlist membership is still checked fresh.
+- Review failed recording matches in one queue, save choices, then download the matched batch.
+- Play YouTube search-result previews inside the app before selecting a recording.
+- A consistent 20-second duration tolerance with warnings for longer differences.
+- **Simple filenames remain the default:** `Artist - Title.mp3`. Optional destination-specific numbering lives under **Help & settings → Song filenames**, with 1–6 digits of padding and a filename preview before applying.
+
 ## Other launch options
 
 - **Finder shortcut.** After setup, double-click `Open Pocket Sync.command`. If Finder cannot launch it after extracting a ZIP, use the Terminal command above or run `/bin/zsh "Open Pocket Sync.command"` from the project folder.

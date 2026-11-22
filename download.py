@@ -11,6 +11,8 @@ import sys
 from datetime import datetime
 from urllib.parse import urlparse
 
+DURATION_TOLERANCE = 20
+
 ROOT = Path(__file__).resolve().parent
 
 
@@ -64,8 +66,8 @@ def audit(folder, songs, files=None):
                     issues.append('Artist differs from Spotify metadata')
                 if audio.info.length <= 0:
                     issues.append('Empty audio')
-                if abs(audio.info.length - song.get('duration', audio.info.length)) > 10:
-                    issues.append('Duration differs by more than 10 seconds; check recording version')
+                if abs(audio.info.length - song.get('duration', audio.info.length)) > DURATION_TOLERANCE:
+                    issues.append('Duration differs by more than 20 seconds; check recording version')
             except Exception as error:
                 issues.append(f'Cannot read audio: {error}')
         results.append({'title': song['name'], 'artists': song['artists'], 'spotify_url': song.get('url'), 'file': str(candidates[0]) if candidates else None, 'issues': issues})

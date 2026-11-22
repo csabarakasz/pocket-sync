@@ -7,7 +7,9 @@ from playlist_sync.library import scan_folder, compare, read_track
 
 
 class ReuseStore:
-    def __init__(self, runtime):
+    def __init__(self, runtime, cache=None):
+        self.cache = cache
+        self.validated = {}
         self.path = Path(runtime)/'local-files.json'
         try:
             self.data = json.loads(self.path.read_text())
@@ -46,23 +48,39 @@ class ReuseStore:
         except (OSError, ValueError):
             return False
 
+    def verified(self, song, path):
+        try:
+            stat = Path(path).stat()
+            key = (str(path), stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns,
+                   json.dumps({k:v for k,v in song.items() if not k.startswith('_') and not k.startswith('list_')}, sort_keys=True))
+            if key not in self.validated:
+                self.validated[key] = self.valid(song, path)
+            return self.validated[key]
+        except OSError:
+            return False
+
     def discover(self, songs):
+        scanned = {}
         # Only user-selected music roots are searched, never the whole computer.
         for folder in self.data['folders']:
             root = Path(folder)
             if not root.is_dir() or root.is_symlink():
                 continue
-            rows, _ = compare(songs, scan_folder(root), root)
+            records = scan_folder(root, self.cache)
+            scanned[str(root)] = records
+            rows, _ = compare(songs, records, root)
             by_id = {s['song_id']: s for s in songs}
             for row in rows:
                 if row['status'] == 'present':
                     path = root/row['file']
-                    if self.valid(by_id[row['id']], path):
+                    if self.verified(by_id[row['id']], path):
                         self.remember(row['id'], path)
+
+        return scanned
 
     def find(self, song, destination):
         for value in self.data['tracks'].get(song['song_id'], []):
             path = Path(value)
-            if path.parent != destination and self.valid(song, path):
+            if path.parent != destination and self.verified(song, path):
                 return path
         return None

@@ -16,7 +16,7 @@ import time
 import uuid
 
 from download import spotify_link, audit
-from playlist_sync.library import compare, scan_folder, read_track
+from playlist_sync.library import compare, scan_folder, read_track, FileIndex
 from playlist_sync.libraries import LibraryStore, choose_folder
 from playlist_sync.reuse import ReuseStore
 from playlist_sync.history import HistoryStore, timestamp, read_log, download_failure, youtube_url
@@ -50,10 +50,15 @@ def clean_filename(name):
 
 def install_file(source, folder, identity, filename=None):
     """Exclusive creation preserves every existing file, even on FAT/exFAT devices."""
+    from playlist_sync.playback import update_playlist
     ensure_folder(folder, identity)
-    name = filename or source.name
+    # Capture the existing order before introducing a new file.
+    update_playlist(folder)
+    from playlist_sync.ordering import next_filename, remember_number
+    name = next_filename(folder, filename or source.name)
     if Path(name).name != name:
         raise ValueError('Expected a filename, without a directory.')
+    allocated_name = name
     destination = folder / name
     # Work through a directory descriptor so an unplug never falls back to a new
     # directory on the Mac. A temporary filename is never considered music.
@@ -81,7 +86,7 @@ def install_file(source, folder, identity, filename=None):
                     if filename is None:
                         raise
                     number += 1
-                    name = f'{Path(filename).stem} ({number}){Path(filename).suffix}'
+                    name = f'{Path(allocated_name).stem} ({number}){Path(allocated_name).suffix}'
             destination = folder / name
             try:
                 os.rename(partial, name, src_dir_fd=descriptor, dst_dir_fd=descriptor)
@@ -96,6 +101,9 @@ def install_file(source, folder, identity, filename=None):
             raise
     finally:
         os.close(descriptor)
+    ensure_folder(folder, identity)
+    remember_number(folder, destination.name)
+    update_playlist(folder)
     return destination
 
 
@@ -103,6 +111,7 @@ class SyncEngine:
     def __init__(self, runtime=None):
         self.runtime = Path(runtime or ROOT / '.runtime' / 'playlist-sync')
         self.runtime.mkdir(parents=True, exist_ok=True)
+        self.file_cache = FileIndex(self.runtime/'file-index.json')
         self.history = HistoryStore(self.runtime)
         self.lock = threading.RLock()
         self.cancel = threading.Event()
@@ -124,7 +133,7 @@ class SyncEngine:
         except (OSError, ValueError):
             pass
         self.libraries = LibraryStore(self.runtime, settings)
-        self.reuse = ReuseStore(self.runtime)
+        self.reuse = ReuseStore(self.runtime, self.file_cache)
         for library in self.libraries.list():
             self.reuse.register(library['folder'])
         for run in self.history.list():
@@ -232,6 +241,11 @@ class SyncEngine:
         with self.lock:
             state = copy.deepcopy(self.state)
             state['history_revision'] = self.history.revision
+            from playlist_sync.ordering import preference
+            try:
+                state['naming'] = preference(state['settings']['folder'])
+            except (OSError,ValueError) as error:
+                state['naming'] = {'enabled':False,'digits':3,'error':str(error)}
             state['folder_available'] = bool(state['settings']['folder']) and Path(state['settings']['folder']).is_dir()
             from playlist_sync.compilations import custom_snapshot
             state['custom_imports'] = custom_snapshot(self)
@@ -256,6 +270,42 @@ class SyncEngine:
         with self.lock:
             self.state.update(data)
 
+    def preview_order(self, digits=None, enabled=True):
+        from playlist_sync.ordering import preview
+        with self.lock:
+            if self.state['phase'] in ('checking', 'syncing') or self.choosing_folder:
+                raise ValueError('Wait for the current job before changing playback order.')
+            if not self.libraries.get()['folder']:
+                raise ValueError('Choose a music folder first.')
+            folder=Path(self.libraries.get()['folder'])
+            identity=folder_identity(folder)
+            plan=preview(folder,digits,enabled)
+            self.order_plan={'id':uuid.uuid4().hex,'library_id':self.library_id,'folder':str(folder),'identity':identity,'plan':plan}
+            return {'id':self.order_plan['id'],'folder':str(folder),**plan}
+
+    def apply_order(self, plan_id):
+        from playlist_sync.ordering import apply, rewrite_references
+        with self.lock:
+            if self.state['phase'] in ('checking', 'syncing') or self.choosing_folder:
+                raise ValueError('Wait for the current job before changing playback order.')
+            saved=getattr(self,'order_plan',None)
+            if not saved or saved['id']!=plan_id or saved['library_id']!=self.library_id or saved['folder']!=self.libraries.get()['folder']:
+                raise ValueError('Preview playback order again before applying it.')
+            folder=Path(saved['folder'])
+            mapping,journal=apply(folder,saved['plan'],lambda:ensure_folder(folder,saved['identity']))
+            try:
+                backup=rewrite_references(self.runtime,folder,mapping)
+            except (OSError,ValueError) as error:
+                self.order_plan=None
+                raise ValueError('Files were numbered, but saved file references could not be updated. Keep the rollback record '+str(journal)+' and retry the folder check. '+str(error)) from error
+            self.reuse=ReuseStore(self.runtime,self.file_cache)
+            self.history.revision=time.time_ns()
+            self.contexts.clear();self.order_plan=None
+            if self.folder==folder and self.state.get('scan_id'):
+                self.refresh_local();self.update(scan_id=uuid.uuid4().hex)
+            self.update(message='Numbered filenames enabled for this destination.' if saved['plan']['enabled'] else 'Simple filenames enabled for future additions.')
+            return {'renamed':len(mapping),'rollback':str(journal),'reference_backup':str(backup),'enabled':saved['plan']['enabled'],'digits':saved['plan']['digits']}
+
     def mappings(self):
         try:
             data = json.loads((self.runtime/'matches.json').read_text())
@@ -270,7 +320,7 @@ class SyncEngine:
             if not row or row['status'] != 'review' or relative not in [x['file'] for x in row.get('candidates', [])]:
                 raise ValueError('That file is not a current review candidate. Check the folder again.')
             ensure_folder(self.folder, self.identity)
-            local = next(x for x in scan_folder(self.folder) if str(x.path.relative_to(self.folder)) == relative)
+            local = next(x for x in scan_folder(self.folder, self.file_cache) if str(x.path.relative_to(self.folder)) == relative)
             if local.error:
                 raise ValueError('This file cannot be read as audio and cannot be used as a match.')
             path = self.runtime/'matches.json'
@@ -321,13 +371,20 @@ class SyncEngine:
             with self.lock:
                 self.process = process
             start = time.monotonic()
+            offset, buffered, lines = 0, '', []
             try:
                 while process.poll() is None:
                     if self.cancel.is_set():
                         raise InterruptedError('Stopped. Files already copied are kept.')
                     if time.monotonic()-start > timeout:
                         raise TimeoutError('The music service took too long to respond. You can retry this track.')
-                    lines = logfile.read_text(errors='replace').splitlines()
+                    with logfile.open(errors='replace') as stream:
+                        stream.seek(offset)
+                        buffered += stream.read()
+                        offset = stream.tell()
+                    complete = buffered.split('\n')
+                    buffered = complete.pop()
+                    lines = (lines + complete)[-10:]
                     if playlist_progress:
                         for line in reversed(lines[-10:]):
                             match = re.fullmatch(r'Playlist metadata progress: (\d+)/(\d+)', line)
@@ -350,6 +407,7 @@ class SyncEngine:
                     self.process = None
 
     def _scan(self, link):
+        started = time.monotonic()
         job = self.runtime/self.state['job_id']
         job.mkdir()
         try:
@@ -358,19 +416,23 @@ class SyncEngine:
             if code or not manifest.exists():
                 raise ValueError('Could not read the Spotify playlist. Make sure it is public and try again. See activity for details.')
             playlist = json.loads(manifest.read_text())
+            spotify_seconds = time.monotonic()-started
             if self.cancel.is_set():
                 raise InterruptedError('Check stopped.')
             ensure_folder(self.folder, self.identity)
             self.playlist = playlist
             self.songs = playlist['songs']
             self.update(message='Looking for music you already have…', progress={'done': 0, 'total': 0})
-            self.reuse.discover(self.songs)
+            scan_started = time.monotonic()
+            initial_hits, initial_misses = self.file_cache.hits, self.file_cache.misses
+            scanned = self.reuse.discover(self.songs)
             if self.cancel.is_set():
                 raise InterruptedError
             self.update(message='Comparing the playlist with your destination folder…')
-            self.refresh_local()
+            self.refresh_local(records=scanned.get(str(self.folder)))
             if self.cancel.is_set():
                 raise InterruptedError
+            atomic_json(job/'timings.json', {'spotify_seconds': round(spotify_seconds, 3), 'local_seconds': round(time.monotonic()-scan_started, 3), 'total_seconds': round(time.monotonic()-started, 3), 'tag_cache_hits': self.file_cache.hits-initial_hits, 'tag_cache_misses': self.file_cache.misses-initial_misses})
             self.last_scan = time.time()
             self.update(phase='ready', message='Comparison complete. Choose what to add.', scan_id=uuid.uuid4().hex,
                         playlist_name=playlist['name'], skipped=playlist['skipped'], playlist_total=playlist['total'],
@@ -380,9 +442,9 @@ class SyncEngine:
         except Exception as error:
             self.update(phase='error', message=str(error), errors=[str(error)])
 
-    def refresh_local(self):
+    def refresh_local(self, records=None):
         ensure_folder(self.folder, self.identity)
-        self.records = scan_folder(self.folder)
+        self.records = scan_folder(self.folder, self.file_cache) if records is None else records
         rows, extras = compare(self.songs, self.records, self.folder, self.mappings())
         self.reuse.register(self.folder)
         songs_by_id = {s['song_id']: s for s in self.songs}
@@ -493,16 +555,34 @@ class SyncEngine:
                 self.update(current_id=song['song_id'], message=f"Adding {song['name']}…")
                 stage = job/song['song_id']
                 stage.mkdir()
-                manifest = stage/'track.spotdl'
-                # Internal sync options are not fields accepted by spotDL's Song.
-                atomic_json(manifest, [{key: value for key, value in song.items() if not key.startswith('_')}])
                 try:
+                    if song.get('_metadata_stale'):
+                        self.update(message=f"Refreshing metadata for {song['name']}…")
+                        fresh = stage/'fresh.json'
+                        code = self.run_process([sys.executable, str(ROOT/'playlist_sync/spotify_fetch.py'), '--track', song['song_id'], str(fresh)], 120, stage/'metadata.log')
+                        if code or not fresh.exists():
+                            raise ValueError('Could not refresh track metadata. Retry after checking your connection.')
+                        chosen_source = song.get('download_url')
+                        membership = {k:v for k,v in song.items() if k.startswith('list_')}
+                        song.update(json.loads(fresh.read_text()))
+                        song.update(membership)
+                        if chosen_source:
+                            song['download_url'] = chosen_source
+                        song.pop('_metadata_stale', None)
+                        self.songs = [{k:v for k,v in {**s, **song}.items() if not k.startswith('_')} if s['song_id']==song['song_id'] else s for s in self.songs]
+                    manifest = stage/'track.spotdl'
+                    # Internal sync options are not fields accepted by spotDL's Song.
+                    atomic_json(manifest, [{key: value for key, value in song.items() if not key.startswith('_')}])
                     source = None if song.get('_force_download') else self.reuse.find(song, self.folder)
                     log = ''
                     result = None
                     if source:
                         self.update(message=f"Copying local file: {song['name']}…")
-                        candidate = stage/clean_filename(source.name)
+                        from playlist_sync.ordering import load as load_numbering, NUMBER
+                        source_name=source.name
+                        if load_numbering(source.parent):
+                            source_name=NUMBER.sub('',source_name)
+                        candidate = stage/clean_filename(source_name)
                         try:
                             shutil.copyfile(source, candidate)
                             group = read_track(candidate).group_ids
@@ -556,7 +636,11 @@ class SyncEngine:
                             saved = {}
                         saved[song['song_id']] = {'url': song['download_url'], 'verified_at': timestamp()}
                         atomic_json(source_file, saved)
-                    self.refresh_local()
+                    updated_records = [r for r in self.records if r.path != Path(item.get('file') or '')]
+                    if item.get('file'):
+                        updated_records.append(self.file_cache.read(Path(item['file'])))
+                    self.file_cache.save()
+                    self.refresh_local(records=updated_records)
                 except (InterruptedError, OSError):
                     raise
                 except Exception as error:

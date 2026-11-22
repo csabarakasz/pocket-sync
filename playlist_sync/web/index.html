@@ -29,7 +29,8 @@
     <div><strong id="count-review">0</strong><span>possible matches to review</span></div>
   </div>
   <div class="last-sync" id="last-sync" hidden></div>
-  <div class="action-strip"><div><span class="status-dot" id="status-dot" hidden></span><span id="status" class="wait-status is-waiting" role="status">Connecting to Pocket Sync…</span></div><button id="sync" class="button primary" disabled>Add missing songs <span aria-hidden="true">↓</span></button><button id="combine-playlist" type="button" class="button secondary">Combine YouTube parts…</button><button id="stop" class="button secondary" hidden>Stop</button></div>
+  <div class="action-strip"><div><span class="status-dot" id="status-dot" hidden></span><span id="status" class="wait-status is-waiting" role="status">Connecting to Pocket Sync…</span></div><button id="sync" class="button primary" disabled>Add missing songs <span aria-hidden="true">↓</span></button><button id="playback-order" type="button" class="button secondary">Naming settings…</button><button id="match-remaining" type="button" class="button secondary">Match remaining songs…</button><button id="combine-playlist" type="button" class="button secondary">Combine YouTube parts…</button><button id="stop" class="button secondary" hidden>Stop</button></div>
+  <p id="naming-note" class="source-note" hidden>Numbered filenames are enabled for this destination. Change their padding in Help &amp; settings → Song filenames.</p>
   <div class="job-progress" id="job-progress" hidden>
     <progress id="progress" max="1" aria-label="Current task progress"></progress>
     <span id="progress-text" role="status"></span>
@@ -76,8 +77,10 @@
  <label class="coverage-confirm"><input id="combine-confirm" type="checkbox">I confirm this YouTube playlist is the same complete recording and covers all the Spotify tracks checked above, even when the parts and durations differ.</label></div>
  </div></div><div class="dialog-actions dialog-footer"><span id="combine-total"></span><button type="submit" class="button primary" id="combine-start" disabled>Combine and add to folder</button></div>
  </form></dialog>
+<dialog id="order-dialog" class="recording-dialog panel-dialog" aria-labelledby="order-title"><form id="order-form" class="dialog-frame"><div class="dialog-heading"><h2 id="order-title">Keep new songs at the end</h2><button type="button" id="order-close" class="button secondary" aria-label="Close playback order">✕</button></div><div class="dialog-scroll"><p>For players that sort by filename. Existing songs keep their current filename order. When enabled, files in this folder receive permanent number prefixes using your chosen padding; new songs get higher numbers. Subfolders and audio tags stay unchanged.</p><p id="order-folder" class="source-note"></p><p>A rollback record is saved on the player, and saved file references are updated. Review the filenames before applying.</p><p id="order-status" role="status"></p><ol id="order-preview"></ol></div><div class="dialog-footer dialog-actions"><button id="order-apply" class="button primary" disabled>Apply naming settings</button></div></form></dialog>
 <dialog id="source-dialog" class="recording-dialog panel-dialog" aria-labelledby="source-title">
  <form id="source-form" class="dialog-frame"><div class="dialog-heading"><h2 id="source-title">Choose a YouTube recording</h2><button type="button" class="button secondary" id="source-close" aria-label="Close recording chooser">✕</button></div>
+ <div id="match-queue" hidden><p id="match-progress" role="status"></p><div class="queue-controls"><button type="button" id="match-back" class="button secondary">Back</button><button type="button" id="match-skip" class="button secondary">Skip</button><button type="button" id="match-finish" class="button secondary">Review matches</button></div><div id="match-summary" hidden></div></div>
  <aside id="source-recovery" class="recovery-hint dialog-guide" hidden>
    <p id="source-recovery-text" role="status"></p>
    <button type="button" class="button secondary" id="source-recovery-end">End walkthrough</button>
@@ -86,11 +89,12 @@
  <p id="source-song"></p><p class="source-note">Pick the correct artist and version. Spotify’s title, album and cover art will be embedded, and the audio duration will still be checked.</p>
  <label for="recording-query">Search YouTube</label><div class="recording-search"><input id="recording-query" type="search" maxlength="250" placeholder="Artist and song title"><button class="button secondary" type="button" id="recording-search">Search</button></div>
  <p id="recording-status" class="wait-status" role="status" aria-live="polite"></p><div id="recording-results" aria-label="YouTube search results"></div>
+ <div id="recording-preview" hidden></div>
  <label for="source-url">Selected YouTube video link (or paste your own)</label><input id="source-url" type="url" required placeholder="https://www.youtube.com/watch?v=…" spellcheck="false">
- </div><div class="dialog-actions dialog-footer" id="source-actions"><p id="source-feedback" role="status"></p><a id="source-search" target="_blank" rel="noreferrer">Search YouTube ↗</a><button id="source-download" class="button primary" type="submit" disabled>Download this recording ↓</button></div></form>
+ </div><div class="dialog-actions dialog-footer" id="source-actions"><p id="source-feedback" role="status"></p><a id="source-search" target="_blank" rel="noreferrer">Search YouTube ↗</a><button type="button" id="match-download" class="button primary" hidden>Download matched songs</button><button id="source-download" class="button primary" type="submit" disabled>Download this recording ↓</button></div></form>
 </dialog>
 <details id="activity"><summary>Activity & download details</summary><p>Audio is matched on YouTube using Spotify metadata. Every new MP3 is checked for cover art, tags, and duration before it is copied. A match can still be a different recording.</p><div id="error-list"></div><pre id="log">No activity yet.</pre></details>
-<footer><span>Your existing songs stay exactly where they are.</span><span>MP3 · Embedded cover art · Artist & album tags</span></footer>
+<footer><span>Your audio stays intact.</span><span>MP3 · Embedded cover art · Artist & album tags</span></footer>
 </main>
 <dialog id="help-dialog" class="panel-dialog" aria-labelledby="help-title">
  <div class="dialog-frame">
@@ -99,6 +103,16 @@
     <form method="dialog"><button class="button secondary" aria-label="Close help and settings">✕</button></form>
   </div>
   <div class="dialog-scroll">
+  <section id="naming-settings" aria-labelledby="naming-title">
+    <h3 id="naming-title">Song filenames</h3>
+    <p>Default: Artist - Title.mp3, without numbers. These settings apply to the selected destination.</p>
+    <p id="naming-folder" class="source-note"></p>
+    <label class="naming-toggle"><input id="naming-enabled" type="checkbox"> Add numbers to keep new songs at the end</label>
+    <div id="naming-options" hidden><label for="naming-digits">Number of digits (including leading zeros)</label><select id="naming-digits"><option value="1">1 — 1, 2, 3</option><option value="2">2 — 01, 02, 03</option><option value="3">3 — 001, 002, 003</option><option value="4">4 — 0001, 0002, 0003</option><option value="5">5 — 00001, 00002, 00003</option><option value="6">6 — 000001, 000002, 000003</option></select><p id="naming-example" class="source-note"></p></div>
+    <p class="source-note">Enabling numbering or changing its padding previews existing filenames before applying. Turning it off uses simple filenames for future additions; existing filenames stay as they are.</p>
+    <button type="button" id="naming-review" class="button secondary">Review naming changes</button>
+    <p id="naming-status" role="status"></p>
+  </section>
   <div class="help-action">
     <div><h3>Getting started</h3><p>See where to add a playlist, pick a folder, and sync your songs.</p></div>
     <button type="button" class="button secondary" id="walkthrough-help" disabled>Replay walkthrough</button>
@@ -122,14 +136,14 @@
   </details>
   <details class="help-topic">
     <summary>Request a feature</summary>
-    <p>Fill in this draft, then copy it into a new issue on the Pocket Sync GitHub repository. Keep private links and paths out of the draft.</p>
+    <p>Fill in this draft, then copy it into a new issue on the Pocket Sync GitHub repository once it’s available. Keep private links and paths out of the draft.</p>
     <label for="feature-draft">Feature request draft</label>
     <textarea id="feature-draft" rows="5" spellcheck="true">What would you like Pocket Sync to do?
 
 What are you trying to accomplish?
 
 What do you do today?</textarea>
-    <button type="button" class="button secondary" id="feature-copy">Copy draft</button> <a href="https://github.com/csabarakasz/pocket-sync/issues/new/choose" target="_blank" rel="noreferrer">Open GitHub Issues ↗</a>
+    <button type="button" class="button secondary" id="feature-copy">Copy draft</button>
     <p id="feature-status" role="status"></p>
   </details>
   </div>

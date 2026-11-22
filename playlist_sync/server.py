@@ -33,8 +33,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Content-Length', str(len(body)))
         self.send_header('Cache-Control', 'no-store')
         self.send_header('X-Content-Type-Options', 'nosniff')
-        self.send_header('Referrer-Policy', 'no-referrer')
-        self.send_header('Content-Security-Policy', "default-src 'self'; img-src 'self' https://i.scdn.co https://mosaic.scdn.co https://i.ytimg.com; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'")
+        self.send_header('Referrer-Policy', 'strict-origin-when-cross-origin')
+        self.send_header('Content-Security-Policy', "default-src 'self'; img-src 'self' https://i.scdn.co https://mosaic.scdn.co https://i.ytimg.com; script-src 'self'; style-src 'self'; connect-src 'self'; frame-src https://www.youtube-nocookie.com https://www.youtube.com; frame-ancestors 'none'; base-uri 'none'")
         self.end_headers()
         self.wfile.write(body)
 
@@ -113,6 +113,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(200, {'path': selected, 'cancelled': selected is None})
             elif self.path == '/api/check':
                 engine.start_scan(str(data.get('playlist', '')), str(data.get('folder', '')))
+            elif self.path == '/api/order/preview':
+                return self.respond(200, engine.preview_order(data.get('digits'),data.get('enabled',True)))
+            elif self.path == '/api/order/apply':
+                return self.respond(200, engine.apply_order(data.get('plan_id')))
             elif self.path == '/api/sync':
                 engine.start_sync(data.get('scan_id'), data.get('ids'), data.get('sources'))
             elif self.path == '/api/match':

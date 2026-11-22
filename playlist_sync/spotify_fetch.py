@@ -19,8 +19,17 @@ def retry(function):
             time.sleep(1+attempt)
 
 
+def save_cache(path, cache):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix('.tmp')
+    temporary.write_text(json.dumps(cache, ensure_ascii=False))
+    temporary.replace(path)
+
+
 def fetch(url, cache_path):
-    SpotifyClient.init(DEFAULT_CONFIG['client_id'], DEFAULT_CONFIG['client_secret'], no_cache=True)
+    started = time.monotonic()
+    hits = misses = 0
+    SpotifyClient.init(DEFAULT_CONFIG['client_id'], DEFAULT_CONFIG['client_secret'], no_cache=False)
     # Reuse the same public-playlist client for the first page and pagination.
     # SpotipyFree otherwise constructs a new token session for each operation.
     def first_page():
@@ -53,15 +62,21 @@ def fetch(url, cache_path):
             continue
         sid = uri.split(':')[-1]
         cached = cache.get(sid, {})
-        if cached and time.time()-cached.get('fetched_at', 0) < 7*86400:
+        if cached.get('song'):
+            hits += 1
             song = dict(cached['song'])
+            song['_metadata_stale'] = time.time()-cached.get('fetched_at', 0) >= 7*86400
         else:
+            misses += 1
             print(f'Fetching track metadata {pos}/{expected}', flush=True)
-            song = retry(lambda: Song.from_url(f'https://open.spotify.com/track/{sid}').json)
+            try:
+                song = retry(lambda: Song.from_url(f'https://open.spotify.com/track/{sid}').json)
+            except Exception:
+                save_cache(cache_path, cache)
+                raise
             cache[sid] = {'fetched_at': time.time(), 'song': song}
-            tmp = cache_path.with_suffix('.tmp')
-            tmp.write_text(json.dumps(cache, ensure_ascii=False))
-            tmp.replace(cache_path)
+            if misses % 10 == 0:
+                save_cache(cache_path, cache)
         # Positions and membership always come from the current playlist.
         song.update(list_name=playlist['name'], list_url=url, list_position=pos, list_length=expected)
         songs.append(song)
@@ -69,10 +84,27 @@ def fetch(url, cache_path):
     if len(songs)+len(skipped) != expected:
         raise ValueError('The playlist comparison is incomplete. Please check again.')
     print(f'Read {len(songs)} music entries; {len(skipped)} unavailable entries.', flush=True)
+    save_cache(cache_path, cache)
+    print(f'Metadata cache: {hits} hits, {misses} misses; elapsed {time.monotonic()-started:.2f}s', flush=True)
     return {'name': playlist['name'], 'url': url, 'total': expected, 'songs': songs, 'skipped': skipped}
 
 
 if __name__ == '__main__':
+    if sys.argv[1] == '--track':
+        SpotifyClient.init(DEFAULT_CONFIG['client_id'], DEFAULT_CONFIG['client_secret'], no_cache=False)
+        output = Path(sys.argv[3])
+        song = retry(lambda: Song.from_url('https://open.spotify.com/track/'+sys.argv[2]).json)
+        output.write_text(json.dumps(song, ensure_ascii=False))
+        cache_path = output.parent.parent.parent/'metadata-cache.json'
+        try:
+            cache = json.loads(cache_path.read_text())
+        except (OSError, ValueError):
+            cache = {}
+        cache[sys.argv[2]] = {'fetched_at': time.time(), 'song': song}
+        tmp = cache_path.with_suffix('.tmp')
+        tmp.write_text(json.dumps(cache, ensure_ascii=False))
+        tmp.replace(cache_path)
+        raise SystemExit(0)
     output = Path(sys.argv[2])
     cache = output.parent.parent/'metadata-cache.json'
     output.write_text(json.dumps(fetch(sys.argv[1], cache), ensure_ascii=False), encoding='utf-8')

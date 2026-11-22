@@ -4,6 +4,9 @@ from pathlib import Path
 import re
 import unicodedata
 import mutagen
+import json
+from dataclasses import asdict
+from download import DURATION_TOLERANCE
 from playlist_sync.compilations import coverage, import_identity
 
 AUDIO = {'.mp3', '.m4a', '.flac', '.ogg', '.opus', '.wav', '.aac', '.wma'}
@@ -69,7 +72,50 @@ def read_track(path):
     return record
 
 
-def scan_folder(folder):
+class FileIndex:
+    """Cache tag parsing, while still enumerating and statting files each scan."""
+    def __init__(self, path):
+        self.path = Path(path)
+        try:
+            self.data = json.loads(self.path.read_text())
+        except (OSError, ValueError):
+            self.data = {}
+        self.hits = self.misses = 0
+        self.dirty = False
+
+    def read(self, path):
+        stat = path.stat()
+        key = str(path.absolute())
+        signature = [stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns]
+        cached = self.data.get(key, {})
+        if cached.get('signature') == signature:
+            try:
+                value = dict(cached['record'])
+                value.update(path=path, ids=set(value['ids']), group_ids=set(value['group_ids']))
+                self.hits += 1
+                return LocalTrack(**value)
+            except (KeyError, TypeError, ValueError):
+                pass
+        self.misses += 1
+        record = read_track(path)
+        value = asdict(record)
+        value.update(path=str(path), ids=sorted(record.ids), group_ids=sorted(record.group_ids))
+        if not record.error:
+            self.data[key] = {'signature': signature, 'record': value}
+            self.dirty = True
+        return record
+
+    def save(self):
+        if not self.dirty:
+            return
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.path.with_suffix('.tmp')
+        tmp.write_text(json.dumps(self.data, ensure_ascii=False))
+        tmp.replace(self.path)
+        self.dirty = False
+
+
+def scan_folder(folder, cache=None):
     records = []
     # Never follow symlinks outside the selected music folder.
     for base, dirs, files in __import__('os').walk(folder, followlinks=False):
@@ -77,7 +123,9 @@ def scan_folder(folder):
         for name in sorted(files):
             path = Path(base)/name
             if not name.startswith('.') and path.suffix.lower() in AUDIO and not path.is_symlink():
-                records.append(read_track(path))
+                records.append(cache.read(path) if cache else read_track(path))
+    if cache:
+        cache.save()
     return records
 
 
@@ -85,6 +133,12 @@ def compare(songs, records, folder, remembered=None):
     remembered = remembered or {}
     matched, rows, used = {}, [], set()
     seen = set()
+    index = {}
+    for number, local in enumerate(records):
+        keys = [('id', sid) for sid in local.ids | local.group_ids]
+        keys += [('title', normalize(local.title)), ('title', filename_title(local.path)), ('path', str(local.path.relative_to(folder)))]
+        for key in keys:
+            index.setdefault(key, set()).add(number)
     for song in songs:
         sid = song['song_id']
         if sid in seen:
@@ -93,13 +147,16 @@ def compare(songs, records, folder, remembered=None):
         title = normalize(song['name'])
         artists = {artist_key(a) for a in song['artists']}
         exact, possible = [], []
-        for local in records:
+        candidates = set(index.get(('id', sid), ())) | set(index.get(('title', title), ()))
+        candidates.update(index.get(('path', remembered.get(sid, {}).get('file')), ()))
+        for number in sorted(candidates):
+            local = records[number]
             rel = str(local.path.relative_to(folder))
             stored = remembered.get(sid, {})
             manual = stored.get('file') == rel and stored.get('fingerprint') == local.fingerprint
             title_same = bool(title) and normalize(local.title) == title
             artist_same = bool(artists) and any(artist_key(a) in artists for a in local.artists)
-            duration_same = abs(local.duration - song['duration']) <= 10
+            duration_same = abs(local.duration - song['duration']) <= DURATION_TOLERANCE
             id_same = sid in local.ids
             # A different embedded Spotify ID must not silently match another release.
             group_same = sid in local.group_ids

@@ -69,6 +69,7 @@ function empty(title, message, symbol='♫') {
 }
 function showTracks() {
   if(!state) return;
+  $('match-remaining').disabled=busy()||!state.scan_id||settingsChanged()||!state.tracks.some(x=>x.status!=='present'&&['no_match','verification'].includes(x.error_code));
   const query=$('search').value.toLowerCase().trim();
   const signature=JSON.stringify([state.tracks,state.extras,state.phase,state.current_id,tab,query,settingsChanged(),[...selectedTracks],recoveryGuideSeen,recoveryGuideTrack,currentView]);
   if(signature===listSignature)return;
@@ -162,6 +163,9 @@ function render(next) {
   $('selection-count').textContent=`${selectedTracks.size} of ${missing} selected${missing-selectedTracks.size?' · '+(missing-selectedTracks.size)+' left out this round':''}`;
   $('select-all').disabled=busy()||edited||selectedTracks.size===missing;
   $('select-none').disabled=busy()||edited||!selectedTracks.size;
+  $('playback-order').disabled=busy()||!state.settings.folder||!state.folder_available;
+  $('playback-order').hidden=!state.naming?.enabled;
+  $('naming-note').hidden=!state.naming?.enabled;
   $('combine-playlist').disabled=busy()||!state.scan_id||edited||!state.folder_available;
   $('sync').hidden=busy();$('stop').hidden=!jobBusy();
   $('job-progress').hidden=!working;
@@ -401,9 +405,9 @@ function showPickerGuide(stage) {
     $('source-recovery-text').textContent = 'Check the selected link, then click Download this recording when you’re ready.';
   }
 }
-function hasRecordingLink() {
+function hasRecordingLink(value=$('source-url').value) {
   try {
-    const url = new URL($('source-url').value.trim());
+    const url = new URL(value.trim());
     if (url.protocol !== 'https:') return false;
     const video = url.hostname === 'youtu.be' ? url.pathname.replace(/^\/+|\/+$/g, '')
       : ['youtube.com','www.youtube.com','m.youtube.com','music.youtube.com'].includes(url.hostname) && url.pathname === '/watch'
@@ -413,7 +417,13 @@ function hasRecordingLink() {
     return false;
   }
 }
-function chooseSource(id){
+function chooseSource(id, queued=false){
+  if(!queued){matchQueue=null;$('match-queue').hidden=true;}
+  recordingSearchNumber++;recordingSearchAbort?.abort();
+  stopPreview();
+  $('source-scroll').hidden=false;$('source-download').hidden=false;$('match-download').hidden=true;
+  $('source-search').hidden=false;$('match-finish').hidden=false;
+  $('source-download').textContent=queued?'Save match & next':'Download this recording ↓';
   sourceTrack=state.tracks.find(x=>x.id===id);
   if(!sourceTrack)return;
   const showRecovery = recoveryGuideTrack === id && sourceTrack.error_code === 'no_match';
@@ -425,7 +435,7 @@ function chooseSource(id){
   $('source-feedback').textContent='';$('source-feedback').style.color='';
   $('recording-query').value=(sourceTrack.artists.join(' ')+' '+sourceTrack.name).slice(0,250);
   $('recording-results').innerHTML='';$('recording-status').textContent='';
-  $('source-dialog').showModal();
+  if(!$('source-dialog').open)$('source-dialog').showModal();
   showPickerGuide(showRecovery ? 'search' : null);
   if (!recoveryGuideSeen && sourceTrack.error_code === 'no_match') completeRecoveryGuide();
   searchRecordings();
@@ -569,6 +579,7 @@ $('combine-form').addEventListener('submit',async event=>{
 });
 let recordingSearchNumber=0,recordingSearchAbort=null;
 async function searchRecordings(){
+  stopPreview();
   const query=$('recording-query').value.trim();
   if(!query){showWait('recording-status',false,'Enter an artist or song title.');return;}
   const number=++recordingSearchNumber,track=sourceTrack?.id,library=state.library_id;
@@ -583,8 +594,8 @@ async function searchRecordings(){
     if(!response.ok)throw new Error(result.error||'Could not search YouTube.');
     $('recording-status').textContent=result.videos.length?`${result.videos.length} recordings · Spotify duration ${duration(sourceTrack.duration)}. Select the artist and version you want.`:'No recordings found. Try another search or paste a video link below.';
     $('recording-results').innerHTML=result.videos.map(video=>{
-      const mismatch=video.duration&&Math.abs(video.duration-sourceTrack.duration)>10;
-      return `<button type="button" class="recording-result" data-recording="${escape(video.url)}" aria-pressed="false"><img src="${escape(video.thumbnail)}" alt="" loading="lazy"><span><strong>${escape(video.title)}</strong><small>${escape(video.channel)} · ${video.duration?duration(video.duration):'Duration unavailable'}</small>${mismatch?'<small class="recording-warning">Different duration · may fail verification</small>':''}</span><span class="recording-select">Select</span></button>`;
+      const mismatch=video.duration&&Math.abs(video.duration-sourceTrack.duration)>20;
+      return `<article class="recording-result"><button type="button" class="recording-thumbnail" data-preview="${escape(video.id)}" aria-label="Preview ${escape(video.title)}"><img src="${escape(video.thumbnail)}" alt="" loading="lazy"><span>▶ Preview</span></button><button type="button" class="recording-choice" data-recording="${escape(video.url)}" aria-pressed="false"><span><strong>${escape(video.title)}</strong><small>${escape(video.channel)} · ${video.duration?duration(video.duration):'Duration unavailable'}</small>${mismatch?'<small class="recording-warning">Over 20 seconds different · will fail verification</small>':''}</span><span class="recording-select">Select</span></button></article>`;
     }).join('');
   }catch(error){if(error.name!=='AbortError'&&number===recordingSearchNumber)$('recording-status').textContent=error.message;}
   finally{if(number===recordingSearchNumber){
@@ -601,18 +612,19 @@ async function searchRecordings(){
 $('recording-search').addEventListener('click',searchRecordings);
 $('recording-query').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();searchRecordings();}});
 $('recording-results').addEventListener('click',event=>{
+  const preview=event.target.closest('[data-preview]');if(preview){playPreview(preview.dataset.preview);return;}
   const button=event.target.closest('[data-recording]');if(!button)return;
   $('source-url').value=button.dataset.recording;
   $('source-download').disabled=!hasRecordingLink();
   document.querySelectorAll('[data-recording]').forEach(row=>{row.setAttribute('aria-pressed',String(row===button));row.querySelector('.recording-select').textContent=row===button?'Selected':'Select';});
   $('source-feedback').style.color='var(--green)';
-  $('source-feedback').textContent='Recording selected. Click Download this recording when ready.';
+  $('source-feedback').textContent=matchQueue?'Recording selected. Save this match to continue to the next song.':'Recording selected. Click Download this recording when ready.';
   if (!$('source-recovery').hidden) {
     showPickerGuide('download');
     $('source-url').scrollIntoView({block:'nearest'});
   }
 });
-$('source-dialog').addEventListener('close',()=>{recordingSearchNumber++;recordingSearchAbort?.abort();$('recording-search').disabled=false;showWait('recording-status',false);showPickerGuide(null);});
+$('source-dialog').addEventListener('close',()=>{stopPreview();recordingSearchNumber++;recordingSearchAbort?.abort();$('recording-search').disabled=false;showWait('recording-status',false);showPickerGuide(null);});
 $('source-recovery-end').addEventListener('click', () => {
   showPickerGuide(null);
   $('source-url').focus({preventScroll:true});
@@ -634,6 +646,10 @@ $('source-close').addEventListener('click',()=>$('source-dialog').close());
 $('source-form').addEventListener('submit',async event=>{
  event.preventDefault();
  if(!sourceTrack||busy()||!hasRecordingLink())return;
+ if(matchQueue){
+   if(!queueIsCurrent())return;
+   matchQueue.drafts[sourceTrack.id]=$('source-url').value.trim();saveMatchDrafts();advanceMatch();return;
+ }
  const button=$('source-download');button.disabled=true;
  const ok=await post('/api/sync',{scan_id:state.scan_id,ids:[sourceTrack.id],sources:{[sourceTrack.id]:$('source-url').value.trim()}});
  button.disabled=!hasRecordingLink();
@@ -870,6 +886,7 @@ function dismissWalkthrough() {
 const helpDialog = $('help-dialog');
 $('help-settings').addEventListener('click', () => {
   $('reset-recording-status').textContent = '';
+  loadNamingSettings();
   helpDialog.showModal();
 });
 $('reset-recording-guide').addEventListener('click', () => {
@@ -941,3 +958,117 @@ window.addEventListener('resize', positionWalkthrough);
 document.querySelector('.brand-mark').append(loadingLogo());
 showWait('status', true);
 refresh();setInterval(refresh,1200);
+
+// Manual choices remain drafts until the user submits the reviewed batch.
+let matchQueue=null;
+function draftKey(){return 'pocket-matches:'+JSON.stringify([state.library_id,state.settings.folder,state.settings.playlist]);}
+function saveMatchDrafts(){try{localStorage.setItem(matchQueue.key,JSON.stringify(matchQueue.drafts));}catch{}}
+function queueIsCurrent(){
+  if(!matchQueue || matchQueue.scan!==state.scan_id || matchQueue.key!==draftKey() || busy()){
+    $('source-feedback').textContent='The comparison changed. Close this chooser and check the playlist before continuing.';return false;
+  }return true;
+}
+function stopPreview(){const host=$('recording-preview');if(host){host.replaceChildren();host.hidden=true;}}
+function playPreview(id){
+  if(!/^[A-Za-z0-9_-]{11}$/.test(id))return;
+  stopPreview();const host=$('recording-preview');host.hidden=false;
+  const frame=document.createElement('iframe');frame.title='YouTube recording preview';
+  frame.src='https://www.youtube-nocookie.com/embed/'+id+'?autoplay=1&playsinline=1&origin='+encodeURIComponent(location.origin);
+  frame.allow='autoplay; encrypted-media; fullscreen';frame.allowFullscreen=true;
+  frame.referrerPolicy='strict-origin-when-cross-origin';
+  const note=document.createElement('p');note.className='source-note';note.textContent='If YouTube cannot play this recording here, try another result or open it on YouTube.';
+  const link=document.createElement('a');link.href='https://www.youtube.com/watch?v='+id;link.target='_blank';link.rel='noreferrer';link.textContent='Open on YouTube ↗';
+  const close=document.createElement('button');close.type='button';close.className='button secondary';close.textContent='Stop preview';close.onclick=stopPreview;
+  host.append(frame,note,link,close);host.scrollIntoView({block:'nearest'});
+}
+$('match-remaining').addEventListener('click',()=>{
+  if(busy()||!state.scan_id||settingsChanged())return;
+  const tracks=state.tracks.filter(x=>x.status!=='present' && ['no_match','verification'].includes(x.error_code));
+  if(!tracks.length){notice('No failed recording matches to review. Use Choose recording on an individual song.');return;}
+  let saved={};try{saved=JSON.parse(localStorage.getItem(draftKey())||'{}');}catch{}
+  const ids=tracks.map(x=>x.id),drafts={};
+  for(const id of ids)if(typeof saved[id]==='string'&&hasRecordingLink(saved[id]))drafts[id]=saved[id];
+  matchQueue={ids,index:0,drafts,key:draftKey(),scan:state.scan_id};showQueuedMatch();
+});
+function showQueuedMatch(){
+  if(!queueIsCurrent())return;
+  if(matchQueue.index>=matchQueue.ids.length){reviewMatches();return;}
+  chooseSource(matchQueue.ids[matchQueue.index],true);
+  $('match-queue').hidden=false;$('match-summary').hidden=true;
+  $('match-progress').textContent=`Song ${matchQueue.index+1} of ${matchQueue.ids.length} · ${Object.keys(matchQueue.drafts).length} match${Object.keys(matchQueue.drafts).length===1?'':'es'} saved`;
+  $('match-back').disabled=matchQueue.index===0;$('match-skip').hidden=false;
+  $('source-url').value=matchQueue.drafts[sourceTrack.id]||'';$('source-download').disabled=!hasRecordingLink();
+}
+function advanceMatch(){stopPreview();matchQueue.index++;showQueuedMatch();}
+function reviewMatches(){
+  if(!queueIsCurrent())return;
+  stopPreview();recordingSearchNumber++;recordingSearchAbort?.abort();showPickerGuide(null);
+  $('source-scroll').hidden=true;$('source-download').hidden=true;$('match-download').hidden=false;$('source-search').hidden=true;$('match-finish').hidden=true;
+  $('match-queue').hidden=false;$('match-summary').hidden=false;$('match-skip').hidden=true;
+  const entries=matchQueue.ids.filter(id=>matchQueue.drafts[id]);
+  $('match-progress').textContent=`${entries.length} matched · ${matchQueue.ids.length-entries.length} left for later`;
+  $('match-summary').innerHTML=matchQueue.ids.map(id=>{const track=state.tracks.find(x=>x.id===id);return `<p>${escape(track?.name)} <small>${matchQueue.drafts[id]?`<a href="${escape(matchQueue.drafts[id])}" target="_blank" rel="noreferrer">Chosen recording ↗</a>`:'Skipped'}</small><button type="button" class="button secondary" data-edit-match="${id}">Edit</button></p>`;}).join('');
+  $('source-feedback').style.color='var(--muted)';
+  $('match-download').disabled=!entries.length;$('match-download').textContent=`Download matched songs (${entries.length})`;
+  $('match-back').disabled=false;$('source-feedback').textContent='Review your choices, then download them together.';
+}
+$('match-back').addEventListener('click',()=>{if(matchQueue){matchQueue.index=Math.max(0,Math.min(matchQueue.index,matchQueue.ids.length)-1);showQueuedMatch();}});
+$('match-skip').addEventListener('click',()=>{if(queueIsCurrent()){delete matchQueue.drafts[sourceTrack.id];saveMatchDrafts();advanceMatch();}});
+$('match-finish').addEventListener('click',reviewMatches);
+$('match-summary').addEventListener('click',event=>{const button=event.target.closest('[data-edit-match]');if(button&&matchQueue){matchQueue.index=matchQueue.ids.indexOf(button.dataset.editMatch);showQueuedMatch();}});
+$('match-download').addEventListener('click',async()=>{
+  if(!queueIsCurrent())return;
+  const ids=matchQueue.ids.filter(id=>matchQueue.drafts[id]);if(!ids.length)return;
+  $('match-download').disabled=true;
+  const ok=await post('/api/sync',{scan_id:matchQueue.scan,ids,sources:Object.fromEntries(ids.map(id=>[id,matchQueue.drafts[id]]))});
+  if(ok){$('source-dialog').close();setView('history');}else{$('match-download').disabled=false;$('source-feedback').textContent=$('notice').textContent;}
+});
+
+let orderPlan=null;
+$('playback-order').addEventListener('click',()=>{loadNamingSettings();helpDialog.showModal();$('naming-enabled').focus();});
+$('naming-review').addEventListener('click',async()=>{
+  if(busy())return;
+  const enabled=$('naming-enabled').checked,digits=Number($('naming-digits').value);
+  helpDialog.close();
+  orderPlan=null;$('order-apply').disabled=true;$('order-preview').replaceChildren();$('order-status').textContent='Reading current filenames…';
+  if(!$('order-dialog').open)$('order-dialog').showModal();
+  const library=state.library_id,folder=state.settings.folder;
+  try{
+    const response=await fetch('/api/order/preview',{method:'POST',headers:{'Content-Type':'application/json','X-Sync-Token':token},body:JSON.stringify({library_id:library,enabled,digits})});
+    const plan=await response.json();if(!response.ok)throw new Error(plan.error);
+    if(!equalOrderContext(library,folder)||!$('order-dialog').open)return;
+    orderPlan={...plan,library,originFolder:folder};$('order-folder').textContent=plan.folder;
+    $('order-title').textContent=plan.enabled?'Numbered filenames':'Simple filenames';
+    $('order-status').textContent=!plan.enabled?'Future additions will use Artist - Title.mp3. Existing filenames will stay unchanged.':plan.changes.length?`${plan.changes.length} files will be numbered in the order shown.`:'No filenames need to change. Save to use this preference for future additions.';
+    $('order-preview').innerHTML=plan.changes.map(x=>`<li><strong>${escape(x.new)}</strong><small>Previously ${escape(x.old)}</small></li>`).join('');
+    $('order-apply').disabled=false;
+  }catch(error){$('order-status').textContent=error.message;}
+});
+function equalOrderContext(library,folder){return state.library_id===library&&state.settings.folder===folder&&!busy();}
+$('order-close').addEventListener('click',()=>$('order-dialog').close());
+$('order-form').addEventListener('submit',async event=>{
+  event.preventDefault();if(!orderPlan||!equalOrderContext(orderPlan.library,orderPlan.originFolder)){$('order-status').textContent='The library changed. Close and preview again.';return;}
+  $('order-apply').disabled=true;
+  try{
+    const response=await fetch('/api/order/apply',{method:'POST',headers:{'Content-Type':'application/json','X-Sync-Token':token},body:JSON.stringify({library_id:orderPlan.library,plan_id:orderPlan.id})});
+    const result=await response.json();if(!response.ok)throw new Error(result.error);
+    $('order-status').textContent=result.enabled?`${result.renamed} filenames updated. Future additions use ${result.digits}-digit numbers.`:'Saved. Future additions use simple filenames without numbers.';
+    $('order-preview').replaceChildren();orderPlan=null;await refresh();
+  }catch(error){$('order-status').textContent=error.message+' Preview again before retrying.';orderPlan=null;}
+});
+
+function loadNamingSettings(){
+  const naming=state.naming||{enabled:false,digits:3};
+  $('naming-enabled').checked=naming.enabled;$('naming-digits').value=String(naming.digits);
+  $('naming-folder').textContent=state.settings.folder||'Choose a destination folder first.';
+  $('naming-status').textContent=naming.error||'';
+  $('naming-review').disabled=busy()||!state.folder_available||!state.settings.folder;
+  updateNamingOptions();
+}
+function updateNamingOptions(){
+  $('naming-options').hidden=!$('naming-enabled').checked;
+  const digits=Number($('naming-digits').value);
+  $('naming-example').textContent=`Example: ${String(1).padStart(digits,'0')} - Artist - Title.mp3. Supports up to ${10**digits-1} numbered files.`;
+}
+$('naming-enabled').addEventListener('change',updateNamingOptions);
+$('naming-digits').addEventListener('change',updateNamingOptions);

@@ -348,3 +348,27 @@
 .combine-intro p {
   flex: 1 1 250px;
 }
+
+.queue-controls{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 16px}
+#match-progress{font-variant-numeric:tabular-nums;font-weight:600}
+.recording-result{display:flex;align-items:stretch;gap:12px}
+.recording-thumbnail{position:relative;flex:0 0 128px;padding:0;border:0;background:#17263a;border-radius:8px;overflow:hidden;cursor:pointer;color:white}
+.recording-thumbnail img{display:block;width:128px;height:80px;object-fit:cover}
+.recording-thumbnail span{position:absolute;bottom:0;left:0;right:0;background:#000b;padding:5px;font-size:12px}
+.recording-choice{display:flex;align-items:center;justify-content:space-between;gap:12px;flex:1;min-width:0;background:transparent;border:0;color:inherit;text-align:left;cursor:pointer;padding:8px}
+.recording-choice[aria-pressed="true"]{outline:2px solid var(--green);border-radius:8px}
+#recording-preview{margin:16px 0;padding:12px;border:1px solid var(--line);border-radius:12px}
+#recording-preview iframe{display:block;width:100%;aspect-ratio:16/9;border:0;border-radius:8px}
+#recording-preview .button{margin-left:12px}
+#match-summary p{display:flex;align-items:center;gap:12px;justify-content:space-between}
+@media(max-width:600px){.recording-result{flex-wrap:wrap}.recording-thumbnail{flex-basis:100%}.recording-thumbnail img{width:100%;height:auto}}
+
+#match-queue{padding:0 20px;flex:0 1 auto;min-height:0;overflow:auto;border-bottom:1px solid var(--line)}
+#match-summary{max-height:45vh;overflow:auto;padding-bottom:12px}
+.library>.source-note{padding:0 27px;font-size:12px;line-height:1.6;color:var(--muted)}
+.action-strip{flex-wrap:wrap;gap:8px 12px}
+.recording-choice:focus-visible,.recording-thumbnail:focus-visible{outline:3px solid #8fafea;outline-offset:2px}
+
+#order-preview li{padding:8px 0;overflow-wrap:anywhere}#order-preview small{display:block;margin-top:4px;color:var(--muted)}
+
+#naming-settings{padding-bottom:20px;margin-bottom:20px;border-bottom:1px solid var(--line)}#naming-settings p{line-height:1.6}.naming-toggle{display:flex;align-items:center;gap:10px;font-size:14px}.naming-toggle input{width:18px;min-height:18px;height:18px}#naming-options{margin:16px 0}#naming-digits{font:inherit;padding:10px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink)}

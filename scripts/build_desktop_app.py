@@ -38,8 +38,8 @@ def build_app(app, work, release):
         'CFBundleIdentifier': 'local.pocketsync.release' if release else 'local.pocketsync.desktop',
         'CFBundleName': 'Pocket Sync', 'CFBundleDisplayName': 'Pocket Sync',
         'CFBundleExecutable': 'PocketSync', 'CFBundlePackageType': 'APPL',
-        'CFBundleIconFile': 'PocketSync.icns', 'CFBundleShortVersionString': '1.0',
-        'CFBundleVersion': '1', 'NSHighResolutionCapable': True,
+        'CFBundleIconFile': 'PocketSync.icns', 'CFBundleShortVersionString': '1.1.0',
+        'CFBundleVersion': '3', 'NSHighResolutionCapable': True,
         'LSMinimumSystemVersion': MACOS_MINIMUM,
     }
     if release:
@@ -48,6 +48,8 @@ def build_app(app, work, release):
         info['PocketSyncProjectPath'] = str(ROOT)
     (contents/'Info.plist').write_bytes(plistlib.dumps(info))
     compile_swift('DesktopLauncher.swift', contents/'MacOS/PocketSync', work/'swift-module-cache')
+    # Finder custom-icon metadata can override CFBundleIconFile and invalidate signing.
+    subprocess.run(['xattr', '-cr', str(app)], check=True)
     subprocess.run(['codesign', '--force', '--sign', '-', str(app)], check=True)
     subprocess.run(['codesign', '--verify', '--deep', '--strict', str(app)], check=True)
 

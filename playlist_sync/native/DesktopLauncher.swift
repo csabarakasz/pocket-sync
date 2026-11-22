@@ -21,6 +21,7 @@ class PocketSyncLauncher: NSObject, NSApplicationDelegate, WKUIDelegate, WKNavig
         let launcher = root.appendingPathComponent("scripts/launch_pocket_sync.py")
         appURL = URL(string: "http://127.0.0.1:\(packaged ? 8879 : 8878)/")!
 
+        NSApplication.shared.applicationIconImage = NSImage(contentsOf: Bundle.main.resourceURL!.appendingPathComponent("PocketSync.icns"))
         window.title = "Pocket Sync"
         window.minSize = NSSize(width: 480, height: 400)
         window.isReleasedWhenClosed = false
@@ -37,9 +38,19 @@ class PocketSyncLauncher: NSObject, NSApplicationDelegate, WKUIDelegate, WKNavig
                 status.centerYAnchor.constraint(equalTo: content.centerYAnchor),
             ])
         }
+        if let value = ProcessInfo.processInfo.environment["POCKET_SYNC_APPEARANCE"] {
+            NSApplication.shared.appearance = NSAppearance(named: value == "dark" ? .darkAqua : .aqua)
+        }
         window.makeKeyAndOrderFront(nil)
         NSApplication.shared.activate(ignoringOtherApps: true)
 
+        // UI QA uses the real shell against an isolated loopback test server.
+        if let testURL = ProcessInfo.processInfo.environment["POCKET_SYNC_TEST_URL"],
+           let url = URL(string: testURL), url.scheme == "http", url.host == "127.0.0.1" {
+            appURL = url
+            showApp()
+            return
+        }
         guard FileManager.default.isExecutableFile(atPath: python.path),
               FileManager.default.fileExists(atPath: launcher.path) else {
             showError("Pocket Sync could not find its Python environment. Reinstall the app or rerun source setup.")
@@ -72,11 +83,29 @@ class PocketSyncLauncher: NSObject, NSApplicationDelegate, WKUIDelegate, WKNavig
 
     private func showApp() {
         loading = false
-        let webView = WKWebView()
+        let configuration = WKWebViewConfiguration()
+        configuration.mediaTypesRequiringUserActionForPlayback = []
+        let webView = WKWebView(frame: window.contentView?.bounds ?? NSRect(x: 0, y: 0, width: 1180, height: 800), configuration: configuration)
+        webView.autoresizingMask = [.width, .height]
         webView.uiDelegate = self
         webView.navigationDelegate = self
         window.contentView = webView
         webView.load(URLRequest(url: appURL))
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        if ProcessInfo.processInfo.environment["POCKET_SYNC_TEST_URL"] != nil {
+            let message = "Loaded \(webView.url?.absoluteString ?? "unknown") frame=\(webView.frame)\n"
+            FileHandle.standardError.write(Data(message.utf8))
+        }
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        if (error as NSError).code != NSURLErrorCancelled { showError("Could not load Pocket Sync: " + error.localizedDescription) }
+    }
+
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        webView.reload()
     }
 
     private func isLocal(_ url: URL) -> Bool {
@@ -89,7 +118,11 @@ class PocketSyncLauncher: NSObject, NSApplicationDelegate, WKUIDelegate, WKNavig
             decisionHandler(.cancel)
             return
         }
-        if isLocal(url) {
+        let embeddedYouTube = action.targetFrame?.isMainFrame == false
+            && url.scheme == "https"
+            && ["www.youtube-nocookie.com", "www.youtube.com"].contains(url.host ?? "")
+            && url.path.hasPrefix("/embed/")
+        if isLocal(url) || embeddedYouTube {
             decisionHandler(.allow)
         } else {
             if action.navigationType == .linkActivated && ["http", "https"].contains(url.scheme ?? "") {
