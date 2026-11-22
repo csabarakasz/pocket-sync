@@ -14,13 +14,11 @@ The app runs locally on your Mac. Setup requires no account or API key. Pocket S
 
 ## What you can do
 
-- **Compare before syncing.** See what is already in the folder, what needs a closer look, and what is missing.
-- **Preview and choose recordings.** Play YouTube results inside the app, compare artist/version/duration, and work through failed matches in one queue before downloading the batch.
-- **Combine parts.** Join a YouTube playlist into one MP3 when it contains the same recording split differently on Spotify.
-- **Import custom audio.** Preview a YouTube video or playlist and choose where to save it.
-- **Check faster.** Reuse cached Spotify metadata and unchanged local file tags while fetching current playlist membership.
-- **Choose filename formatting.** Keep simple `Artist - Title.mp3` names by default, or explicitly enable destination-specific numbering with 1–6 digits in Help & settings.
-- **Keep a record.** Save multiple playlist destinations and review what each sync copied or failed to add.
+- **Sync playlists to a folder or USB MP3 player.** Choose a public Spotify playlist and a destination. Pocket Sync finds matching recordings on YouTube and saves them as MP3s with cover art and tags.
+- **Add only the songs you need.** Compare the playlist with your existing files, review possible matches, and select which missing songs to add. Existing music is kept.
+- **Reuse music you already have.** Copy verified audio from other folders you’ve used with Pocket Sync, so the same recording doesn’t need another download.
+- **Add stories and audiobooks.** Import a YouTube video as an MP3, or combine a playlist of parts into one file.
+- **Manage several playlists and players.** Save each playlist with its destination folder, then check sync history to see what was added and what needs attention.
 
 [Browse the screenshots](docs/SCREENSHOTS.md) · [Read the user guide](POCKET-SYNC.md) · [Report a problem or request a feature](https://github.com/csabarakasz/pocket-sync/issues/new/choose)
 
