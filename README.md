@@ -15,16 +15,18 @@ The app runs locally on your Mac. Setup requires no account or API key. Pocket S
 ## What you can do
 
 - **Compare before syncing.** See what is already in the folder, what needs a closer look, and what is missing.
-- **Choose the recording.** Compare YouTube results by artist, version, and duration. The app can guide you through the picker after a failed match.
+- **Preview and choose recordings.** Play YouTube results inside the app, compare artist/version/duration, and work through failed matches in one queue before downloading the batch.
 - **Combine parts.** Join a YouTube playlist into one MP3 when it contains the same recording split differently on Spotify.
 - **Import custom audio.** Preview a YouTube video or playlist and choose where to save it.
+- **Check faster.** Reuse cached Spotify metadata and unchanged local file tags while fetching current playlist membership.
+- **Choose filename formatting.** Keep simple `Artist - Title.mp3` names by default, or explicitly enable destination-specific numbering with 1–6 digits in Help & settings.
 - **Keep a record.** Save multiple playlist destinations and review what each sync copied or failed to add.
 
 [Browse the screenshots](docs/SCREENSHOTS.md) · [Read the user guide](POCKET-SYNC.md) · [Report a problem or request a feature](https://github.com/csabarakasz/pocket-sync/issues/new/choose)
 
 ## Availability
 
-The initial public release contains the source and setup instructions. The build targets Apple silicon Macs. The bundled Mac ZIP is a separate distribution step. See the [release checklist](RELEASING.md).
+The current public source version is **1.1.0**, with setup instructions and [update notes](docs/RELEASE-NOTES.md). The build targets Apple silicon Macs. The bundled Mac ZIP is a separate distribution step. See the [release checklist](RELEASING.md).
 
 ## Install from source
 
@@ -81,7 +83,7 @@ For YouTube-only imports, choose **Custom audio → Add from YouTube…**, paste
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
-The suite uses FFmpeg to generate test audio. The JavaScript selection test runs when Node.js is available. Network service responses are mocked in the suite.
+The suite uses FFmpeg to generate test audio. The JavaScript selection test runs when Node.js is available. Network service responses are mocked in the suite. The separate matching/settings UI suite uses a disposable fixture and jsdom; see [Contributing](CONTRIBUTING.md#matching-and-settings-ui-tests) for commands.
 
 The downloaded app keeps its settings, sync history, reports, and startup log in `~/Library/Application Support/Pocket Sync/`. The source checkout keeps its own data under `.runtime/`. The command-line downloader uses `Downloads/` by default. spotDL can also keep configuration and cache files in your user folder. Git ignores the project environment, runtime files, downloads, and generated app bundles. `requirements.txt` is the install list. `requirements-lock.txt` records the versions used to build the release.
 

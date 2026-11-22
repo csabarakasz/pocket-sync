@@ -77,7 +77,7 @@ By default, filenames use `Artist - Title.mp3`, without a Spotify ID suffix. Wit
 
 Output is MP3 at 128 kbps with album cover art inside the file. Metadata available from Spotify also includes album artist, disc number, and ISRC; optional fields such as genre may be absent. Re-encoding at a higher bitrate would not improve the source audio. Automatic matching cannot prove that two recordings are acoustically identical, so listen to unfamiliar matches.
 
-Normal syncing does not delete or replace existing music. The separate Playback order action can rename existing audio files after a preview. Tracks removed from Spotify remain in the folder. A repeat sync rescans the folder and skips tracks already present. Disconnecting/replacing the destination stops copying; the app does not recreate a missing player folder. Files appear under their finished names only after the copy has been flushed. Other applications should avoid writing to the same folder during a sync.
+Normal syncing does not delete or replace existing music. The optional Song filenames setting can rename existing audio files after a preview. Tracks removed from Spotify remain in the folder. A repeat sync rescans the folder and skips tracks already present. Disconnecting/replacing the destination stops copying; the app does not recreate a missing player folder. Files appear under their finished names only after the copy has been flushed. Other applications should avoid writing to the same folder during a sync.
 
 ## Troubleshooting
 
@@ -115,7 +115,7 @@ Click **Preview** on a search thumbnail to play the YouTube recording inside the
 
 Each addition maintains **Pocket Sync - Play in order.m3u8** in the destination. Existing playlist entries retain their relative order; new songs append. On first use, existing files are listed in filename order. The playback playlist itself does not rename audio; the optional filename-numbering action below does. Normal syncs, local copies, combined recordings, and custom imports use this same ordering.
 
-Open this playlist on a compatible player to use that order. **Play all songs** may sort filenames, tags, or the device’s own database; its order cannot be guaranteed by the playlist. Device-specific filename migration remains pending confirmation of the player’s actual sorting.
+Open this playlist on a compatible player to use that order. **Play all songs** may sort filenames, tags, or the device’s own database; its order cannot be guaranteed by the playlist. Optional filename numbering can help players that sort by filename; players using their own media database or audio tags may use a different order.
 
 
 ## Optional numbered filenames
